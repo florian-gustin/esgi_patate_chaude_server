@@ -1,5 +1,4 @@
 use serde::{Serialize, Deserialize};
-use crate::challenge_message::ChallengeResult;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Subscribe {

@@ -2,9 +2,9 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use crate::client_message::ClientMessage;
 use crate::player::Player;
-use crate::server_message::{ServerMessage, SubscribeResult, Welcome};
+use crate::server_message::{ServerMessage, SubscribeError, SubscribeResult, Welcome};
 
-pub(crate) fn start_listening() {
+pub(crate) fn start_listening<'stream>() {
     let players = &mut Vec::<Player>::new();
     let address = SocketAddr::from(([127, 0, 0, 1], 7878));
     let listener = TcpListener::bind(address);
@@ -75,14 +75,14 @@ fn send_message(mut stream: &TcpStream, message: &str) {
     }
 }
 
-fn accept_clients_connection(mut listener: &TcpListener, players: &mut Vec<Player>) {
+fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>) {
     let should_accept_connections = &mut true;
-    let streams = &mut Vec::<TcpStream>::new();
     while *should_accept_connections {
+        println!("Players: {:?}", players);
         let mut incoming = listener.incoming();
         let stream = incoming.next().unwrap();
         let stream = stream.unwrap();
-        streams.push(stream.try_clone().unwrap());
+        let stream = &stream;
         let message = read_message(&stream);
         analyse_client_message(&message, &stream, should_accept_connections, players);
     }
@@ -95,25 +95,32 @@ fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_playe
     match message_json {
         ClientMessage::Hello => {
             println!("Hello");
-            let response = ServerMessage::Welcome(Welcome { version: 1 });
-            send_message(&stream, &serde_json::to_string(&response).unwrap());
+            register_new_player(stream, players);
         }
         ClientMessage::Subscribe(subscribe) => {
             println!("Subscribe {:?}", subscribe);
-            players.push(Player {
-                name: subscribe.name,
-                socket: stream.try_clone().unwrap(),
-                score: 0,
-                steps: 0,
-                is_active: true,
-                total_used_time: 0.0
-            });
-            let mut response = ServerMessage::SubscribeResult(SubscribeResult::Ok);
-            send_message(&stream, &serde_json::to_string(&response).unwrap());
+            send_message(stream, "Unexpected message here");
         }
         ClientMessage::StartGame(start_game) => {
             println!("StartGame {:?}", start_game);
             *should_accept_players = false;
+        }
+    }
+}
+
+fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
+    let response = ServerMessage::Welcome(Welcome { version: 1 });
+    send_message(&stream, &serde_json::to_string(&response).unwrap());
+    let message = read_message(&stream);
+    let message_json = serde_json::from_str(&message).unwrap();
+    match message_json {
+        ClientMessage::Subscribe(subscribe) => {
+            println!("Subscribe {:?}", subscribe);
+            let player = Player::new(subscribe.name, &stream);
+            players.push(player);
+        }
+        _ => {
+            send_message(stream, "Unexpected message here");
         }
     }
 }
