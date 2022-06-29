@@ -18,7 +18,7 @@ pub(crate) struct SubscribeError {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum Result {
+pub(crate) enum SubscribeResult {
     Ok,
     SubscribeError(SubscribeError),
 }
@@ -47,7 +47,7 @@ pub(crate) struct EndOfGame {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum ServerMessage {
     Welcome(Welcome),
-    SubscribeResult(Result),
+    SubscribeResult(SubscribeResult),
     PublicLeaderBoard(Vec<PublicPlayer>),
     Challenge(Challenge),
     RoundSummary(RoundSummary),
