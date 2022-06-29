@@ -15,6 +15,7 @@ pub(crate) fn start_listening<'stream>() {
     };
 
     accept_clients_connection(&listener, players);
+    wait_for_game_to_start(&listener);
 }
 
 fn transform_u32_to_array_of_u8(x:u32) -> [u8;4] {
@@ -76,17 +77,36 @@ fn send_message(mut stream: &TcpStream, message: &str) {
 }
 
 fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>) {
-    let should_accept_connections = &mut true;
-    while *should_accept_connections {
+    let should_accept_players = &mut true;
+    while *should_accept_players {
         println!("Players: {:?}", players);
         let mut incoming = listener.incoming();
         let stream = incoming.next().unwrap();
         let stream = stream.unwrap();
-        let stream = &stream;
         let message = read_message(&stream);
-        analyse_client_message(&message, &stream, should_accept_connections, players);
+        analyse_client_message(&message, &stream, should_accept_players, players);
     }
     println!("Stop accepting clients connections");
+}
+
+fn wait_for_game_to_start(listener: &TcpListener) {
+    let wait_start_order = &mut true;
+    while *wait_start_order {
+        let mut incoming = listener.incoming();
+        let stream = incoming.next().unwrap();
+        let stream = stream.unwrap();
+        let message = read_message(&stream);
+        let message_json = serde_json::from_str(&message).unwrap();
+        match message_json {
+            ClientMessage::StartGame(start_game) => {
+                println!("StartGame {:?}", start_game);
+                *wait_start_order = false;
+            }
+            _ => {
+                send_message(&stream, "Impossible to connect anymore");
+            }
+        }
+    }
 }
 
 fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_players: &mut bool, players: &mut Vec<Player>) {
