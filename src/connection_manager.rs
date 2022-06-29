@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use crate::client_message::ClientMessage;
 use crate::player::Player;
 use crate::server_message::{EndOfGame, PublicPlayer, ServerMessage, SubscribeError, SubscribeResult, Welcome};
@@ -78,6 +78,13 @@ fn send_message(mut stream: &TcpStream, message: &str) {
             panic!("{:?}", error);
         }
         _ => {}
+    }
+}
+
+fn send_message_to_players(players: &mut Vec<Player>, message: &str) {
+    for player in players {
+        let mut stream = player.stream.lock().unwrap();
+        send_message(&mut stream, message);
     }
 }
 
@@ -160,18 +167,9 @@ fn start_challenge(players: &mut Vec<Player>) {
 
 fn send_leaderboard(players: &mut Vec<Player>) {
     players.sort_by(|a, b| b.score.cmp(&a.score));
-    let public_players: Vec<PublicPlayer> = players.iter().map(|player| PublicPlayer {
-        name: player.name.clone(),
-        stream_id: player.socket.local_addr().unwrap().to_string(),
-        score: player.score,
-        steps: player.steps,
-        is_active: player.is_active,
-        total_used_time: player.total_used_time,
-    }).collect();
+    let public_players: Vec<PublicPlayer> = get_ordered_public_player_vec(players);
     let message = PublicLeaderBoard(public_players);
-    for player in players {
-        send_message(&player.socket, &serde_json::to_string(&message).unwrap());
-    }
+    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }
 
 fn send_round_summary(players: &mut Vec<Player>) {
@@ -179,6 +177,20 @@ fn send_round_summary(players: &mut Vec<Player>) {
 }
 
 fn finish_game(players: &mut Vec<Player>) {
+    players.sort_by(|a, b| b.score.cmp(&a.score));
+    let public_players: Vec<PublicPlayer> = get_ordered_public_player_vec(players);
+    let message = ServerMessage::EndOfGame(EndOfGame {
+        leader_board: public_players,
+    });
+    let message_json = serde_json::to_string(&message).unwrap();
+    println!("{:?}", message_json);
+    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
+    for player in players {
+        &player.socket.shutdown(Shutdown::Both);
+    }
+}
+
+fn get_ordered_public_player_vec(players: &mut Vec<Player>) -> Vec<PublicPlayer> {
     players.sort_by(|a, b| b.score.cmp(&a.score));
     let public_players: Vec<PublicPlayer> = players.iter().map(|player| PublicPlayer {
         name: player.name.clone(),
@@ -188,10 +200,5 @@ fn finish_game(players: &mut Vec<Player>) {
         is_active: player.is_active,
         total_used_time: player.total_used_time,
     }).collect();
-    let message = ServerMessage::EndOfGame(EndOfGame {
-        leader_board: public_players,
-    });
-    for player in players {
-        send_message(&player.socket, &serde_json::to_string(&message).unwrap());
-    }
+    return public_players;
 }
