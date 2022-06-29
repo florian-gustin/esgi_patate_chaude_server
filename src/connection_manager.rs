@@ -2,7 +2,8 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use crate::client_message::ClientMessage;
 use crate::player::Player;
-use crate::server_message::{PublicPlayer, ServerMessage, SubscribeError, SubscribeResult, Welcome};
+use crate::server_message::{EndOfGame, PublicPlayer, ServerMessage, SubscribeError, SubscribeResult, Welcome};
+use crate::server_message::ServerMessage::PublicLeaderBoard;
 
 pub(crate) fn start_listening<'stream>() {
     let players = &mut Vec::<Player>::new();
@@ -18,6 +19,8 @@ pub(crate) fn start_listening<'stream>() {
     wait_for_game_to_start(&listener);
 
     start_challenge(players);
+
+    finish_game(players);
 }
 
 fn transform_u32_to_array_of_u8(x:u32) -> [u8;4] {
@@ -151,6 +154,7 @@ fn start_challenge(players: &mut Vec<Player>) {
     for round_number in 0..100 {
         println!("Round {}", round_number);
         send_leaderboard(players);
+        send_round_summary(players);
     }
 }
 
@@ -164,7 +168,29 @@ fn send_leaderboard(players: &mut Vec<Player>) {
         is_active: player.is_active,
         total_used_time: player.total_used_time,
     }).collect();
-    let message = ServerMessage::PublicLeaderBoard(public_players);
+    let message = PublicLeaderBoard(public_players);
+    for player in players {
+        send_message(&player.socket, &serde_json::to_string(&message).unwrap());
+    }
+}
+
+fn send_round_summary(players: &mut Vec<Player>) {
+
+}
+
+fn finish_game(players: &mut Vec<Player>) {
+    players.sort_by(|a, b| b.score.cmp(&a.score));
+    let public_players: Vec<PublicPlayer> = players.iter().map(|player| PublicPlayer {
+        name: player.name.clone(),
+        stream_id: player.socket.local_addr().unwrap().to_string(),
+        score: player.score,
+        steps: player.steps,
+        is_active: player.is_active,
+        total_used_time: player.total_used_time,
+    }).collect();
+    let message = ServerMessage::EndOfGame(EndOfGame {
+        leader_board: public_players,
+    });
     for player in players {
         send_message(&player.socket, &serde_json::to_string(&message).unwrap());
     }
