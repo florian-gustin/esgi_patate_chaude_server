@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use crate::client_message::ClientMessage;
 use crate::player::Player;
-use crate::server_message::{ServerMessage, SubscribeError, SubscribeResult, Welcome};
+use crate::server_message::{PublicPlayer, ServerMessage, SubscribeError, SubscribeResult, Welcome};
 
 pub(crate) fn start_listening<'stream>() {
     let players = &mut Vec::<Player>::new();
@@ -16,6 +16,8 @@ pub(crate) fn start_listening<'stream>() {
 
     accept_clients_connection(&listener, players);
     wait_for_game_to_start(&listener);
+
+    start_challenge(players);
 }
 
 fn transform_u32_to_array_of_u8(x:u32) -> [u8;4] {
@@ -142,5 +144,28 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
         _ => {
             send_message(stream, "Unexpected message here");
         }
+    }
+}
+
+fn start_challenge(players: &mut Vec<Player>) {
+    for round_number in 0..100 {
+        println!("Round {}", round_number);
+        send_leaderboard(players);
+    }
+}
+
+fn send_leaderboard(players: &mut Vec<Player>) {
+    players.sort_by(|a, b| b.score.cmp(&a.score));
+    let public_players: Vec<PublicPlayer> = players.iter().map(|player| PublicPlayer {
+        name: player.name.clone(),
+        stream_id: player.socket.local_addr().unwrap().to_string(),
+        score: player.score,
+        steps: player.steps,
+        is_active: player.is_active,
+        total_used_time: player.total_used_time,
+    }).collect();
+    let message = ServerMessage::PublicLeaderBoard(public_players);
+    for player in players {
+        send_message(&player.socket, &serde_json::to_string(&message).unwrap());
     }
 }
