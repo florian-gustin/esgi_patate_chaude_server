@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
-use std::thread;
+use std::time::Instant;
 use crate::challenge::Challenge;
 use crate::challenge_message::Challenge::MD5HashCash;
 use crate::challenge_message::{ChallengeOutput, MD5HashCashInput, ReportedChallengeResult};
@@ -174,15 +174,7 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
 fn start_game(players: &mut Vec<Player>, round: u32, time: u32) {
     for round_number in 0..round {
         let random_time = rand::random::<f32>() * time as f32;
-        // let mut round_ended = false;
         println!("Round {} will last {}", round_number, random_time);
-        // let mut thread = thread::spawn(move || {
-        //     thread::sleep(time::Duration::from_secs(random_time as u64));
-        //     round_ended = true;
-        // });
-        // while !round_ended {
-        //
-        // }
         send_leaderboard(players);
         process_round(players, random_time);
         send_round_summary(players);
@@ -197,29 +189,66 @@ fn send_leaderboard(players: &mut Vec<Player>) {
 }
 
 fn process_round(players: &mut Vec<Player>, round_time: f32) {
-    let random_player = rand::random::<usize>() % players.len();
-    let input = MD5HashCashInput {
-        complexity: 16,
-        message: "A boring bicycle respects our smart computer.".to_string()
-    };
-    let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
-    let hashcash = HashCash::new(input);
-    let challenge_string = serde_json::to_string(&challenge).unwrap();
-    send_message(&players[random_player].socket, &challenge_string);
-    let message = read_message(&players[random_player].socket);
-    let message_json = serde_json::from_str(&message).unwrap();
-    let mut is_solved = false;
-    match message_json {
-        ChallengeResult(ref challenge_result) => {
-            match &challenge_result.answer {
-                ChallengeOutput::MD5HashCash(md5hashcash) => {
-                    is_solved = hashcash.verify(md5hashcash.clone());
+    let mut round_ended = false;
+    let mut elapsed_time = 0.0;
+
+    let players_list_size = players.len();
+    let mut target_player = &mut players[rand::random::<usize>() % players_list_size];
+
+    while !round_ended {
+        let input = MD5HashCashInput {
+            complexity: 16,
+            message: "A boring bicycle respects our smart computer.".to_string()
+        };
+        let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
+        let hashcash = HashCash::new(input.clone());
+        let challenge_string = serde_json::to_string(&challenge).unwrap();
+        let time_before_completion = Instant::now();
+        send_message(&target_player.socket, &challenge_string);
+        let message = read_message(&target_player.socket);
+        let time_after_completion = Instant::now();
+        let message_json = serde_json::from_str(&message).unwrap();
+        let mut is_solved = false;
+        match message_json {
+            ChallengeResult(ref challenge_result) => {
+                target_player = find_player_by_username(players, challenge_result.next_target.clone()).unwrap();
+                match &challenge_result.answer {
+                    ChallengeOutput::MD5HashCash(md5hashcash) => {
+                        is_solved = hashcash.verify(md5hashcash.clone());
+                    }
+                    ChallengeOutput::RecoverSecret(_) => {}
                 }
-                ChallengeOutput::RecoverSecret(_) => {}
             }
         }
+        elapsed_time += time_after_completion.duration_since(time_before_completion).as_secs_f64();
+        target_player.total_used_time += elapsed_time;
+        if elapsed_time > round_time as f64 {
+            round_ended = true;
+            target_player.score -= 1;
+        } else if !is_solved {
+            round_ended = true;
+            target_player.score -= 1;
+        } else {
+            target_player.steps += 1;
+        }
+        println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}",
+                 input.clone(),
+                 is_solved,
+                 round_time,
+                 elapsed_time,
+                 time_after_completion.duration_since(time_before_completion).as_secs_f64(),
+                 message_json);
     }
-    println!("For challenge={}, correct answer={}, player answered {:?}", &challenge_string, is_solved, message_json);
+    println!("End of round, player {} lost a point", target_player.name);
+}
+
+fn find_player_by_username(players: &mut Vec<Player>, username: String) -> Option<&mut Player> {
+    for player in players {
+        if player.name == username {
+            return Some(player);
+        }
+    }
+    None
 }
 
 fn send_round_summary(players: &mut Vec<Player>) {

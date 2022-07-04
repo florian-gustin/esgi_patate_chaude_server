@@ -10,7 +10,6 @@ pub(crate) struct Player {
     pub(crate) total_used_time: f64,
 }
 
-//define player constructor with name and socket
 impl Player {
     pub(crate) fn new(name: String, socket: &TcpStream) -> Player {
         Player {
