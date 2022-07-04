@@ -6,9 +6,9 @@ use crate::player::Player;
 use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, SubscribeError, SubscribeResult, Welcome};
 use crate::server_message::ServerMessage::{PublicLeaderBoard};
 
-pub(crate) fn start_listening<'stream>() {
+pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32) {
     let players = &mut Vec::<Player>::new();
-    let address = SocketAddr::from(([127, 0, 0, 1], 7878));
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(address);
 
     let listener = match listener {
