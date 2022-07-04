@@ -1,25 +1,25 @@
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct MD5HashCashInput {
     pub(crate) complexity: u32,
     pub(crate) message: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct MD5HashCashOutput {
     pub(crate) seed: u64,
     pub(crate) hashcode: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct RecoverSecretInput {
     pub(crate) word_count: usize,
     pub(crate) letters: String,
     pub(crate) tuple_sizes: Vec<usize>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct RecoverSecretOutput {
     pub(crate) secret_sentence: String,
 }
@@ -60,4 +60,9 @@ pub(crate) enum ChallengeValue {
 pub(crate) struct ReportedChallengeResult {
     pub(crate) name: String,
     pub(crate) value: ChallengeValue,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) enum ChallengeMessage {
+    ChallengeResult(ChallengeResult),
 }

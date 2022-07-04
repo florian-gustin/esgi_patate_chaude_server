@@ -1,9 +1,12 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
+use crate::challenge::Challenge;
 use crate::challenge_message::Challenge::MD5HashCash;
-use crate::challenge_message::{MD5HashCashInput, ReportedChallengeResult};
+use crate::challenge_message::{ChallengeOutput, MD5HashCashInput, ReportedChallengeResult};
+use crate::challenge_message::ChallengeMessage::ChallengeResult;
 use crate::client_message::ClientMessage;
+use crate::md5cash_challenge::HashCash;
 use crate::player::Player;
 use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, Welcome};
 use crate::server_message::ServerMessage::{PublicLeaderBoard};
@@ -21,7 +24,7 @@ pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32
     accept_clients_connection(&listener, players, password.clone());
     wait_for_game_to_start(&listener, password.clone());
 
-    start_challenge(players, round, time);
+    start_game(players, round, time);
 
     finish_game(players);
 }
@@ -168,7 +171,7 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
     }
 }
 
-fn start_challenge(players: &mut Vec<Player>, round: u32, time: u32) {
+fn start_game(players: &mut Vec<Player>, round: u32, time: u32) {
     for round_number in 0..round {
         let random_time = rand::random::<f32>() * time as f32;
         // let mut round_ended = false;
@@ -181,7 +184,7 @@ fn start_challenge(players: &mut Vec<Player>, round: u32, time: u32) {
         //
         // }
         send_leaderboard(players);
-        send_challenge(players);
+        process_round(players, random_time);
         send_round_summary(players);
     }
 }
@@ -193,16 +196,30 @@ fn send_leaderboard(players: &mut Vec<Player>) {
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }
 
-fn send_challenge(players: &mut Vec<Player>) {
+fn process_round(players: &mut Vec<Player>, round_time: f32) {
     let random_player = rand::random::<usize>() % players.len();
-    let challenge = ServerMessage::Challenge(MD5HashCash(MD5HashCashInput {
+    let input = MD5HashCashInput {
         complexity: 16,
         message: "A boring bicycle respects our smart computer.".to_string()
-    }));
+    };
+    let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
+    let hashcash = HashCash::new(input);
     let challenge_string = serde_json::to_string(&challenge).unwrap();
     send_message(&players[random_player].socket, &challenge_string);
     let message = read_message(&players[random_player].socket);
-    println!("For challenge={}, player answered {}", &challenge_string, message);
+    let message_json = serde_json::from_str(&message).unwrap();
+    let mut is_solved = false;
+    match message_json {
+        ChallengeResult(ref challenge_result) => {
+            match &challenge_result.answer {
+                ChallengeOutput::MD5HashCash(md5hashcash) => {
+                    is_solved = hashcash.verify(md5hashcash.clone());
+                }
+                ChallengeOutput::RecoverSecret(_) => {}
+            }
+        }
+    }
+    println!("For challenge={}, correct answer={}, player answered {:?}", &challenge_string, is_solved, message_json);
 }
 
 fn send_round_summary(players: &mut Vec<Player>) {
