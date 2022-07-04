@@ -3,7 +3,7 @@ use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use crate::challenge_message::ReportedChallengeResult;
 use crate::client_message::ClientMessage;
 use crate::player::Player;
-use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, SubscribeError, SubscribeResult, Welcome};
+use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, Welcome};
 use crate::server_message::ServerMessage::{PublicLeaderBoard};
 
 pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32) {
@@ -16,10 +16,10 @@ pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32
         Err(err) => panic!("Cannot listen on port : {err:?}")
     };
 
-    accept_clients_connection(&listener, players);
-    wait_for_game_to_start(&listener);
+    accept_clients_connection(&listener, players, password.clone());
+    wait_for_game_to_start(&listener, password.clone());
 
-    start_challenge(players);
+    start_challenge(players, round, time);
 
     finish_game(players);
 }
@@ -89,7 +89,7 @@ fn send_message_to_players(players: &mut Vec<Player>, message: &str) {
     }
 }
 
-fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>) {
+fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>, password: String) {
     let should_accept_players = &mut true;
     while *should_accept_players {
         println!("Players: {:?}", players);
@@ -97,12 +97,12 @@ fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>) 
         let stream = incoming.next().unwrap();
         let stream = stream.unwrap();
         let message = read_message(&stream);
-        analyse_client_message(&message, &stream, should_accept_players, players);
+        analyse_client_message(&message, &stream, should_accept_players, players, password.clone());
     }
     println!("Stop accepting clients connections");
 }
 
-fn wait_for_game_to_start(listener: &TcpListener) {
+fn wait_for_game_to_start(listener: &TcpListener, password: String) {
     let wait_start_order = &mut true;
     while *wait_start_order {
         let mut incoming = listener.incoming();
@@ -113,7 +113,11 @@ fn wait_for_game_to_start(listener: &TcpListener) {
         match message_json {
             ClientMessage::StartGame(start_game) => {
                 println!("StartGame {:?}", start_game);
-                *wait_start_order = false;
+                if start_game.key == password {
+                    *wait_start_order = false;
+                } else {
+                    println!("Wrong password");
+                }
             }
             _ => {
                 send_message(&stream, "Impossible to connect anymore");
@@ -122,7 +126,7 @@ fn wait_for_game_to_start(listener: &TcpListener) {
     }
 }
 
-fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_players: &mut bool, players: &mut Vec<Player>) {
+fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_players: &mut bool, players: &mut Vec<Player>, password: String) {
     println!("{:?}", message);
     let message_json = serde_json::from_str(&message).unwrap();
     match message_json {
@@ -136,7 +140,11 @@ fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_playe
         }
         ClientMessage::StartGame(start_game) => {
             println!("StartGame {:?}", start_game);
-            *should_accept_players = false;
+            if start_game.key == password {
+                *should_accept_players = false;
+            } else {
+                println!("Wrong password");
+            }
         }
     }
 }
@@ -158,8 +166,8 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
     }
 }
 
-fn start_challenge(players: &mut Vec<Player>) {
-    for round_number in 0..100 {
+fn start_challenge(players: &mut Vec<Player>, round: u32, time: u32) {
+    for round_number in 0..round {
         println!("Round {}", round_number);
         send_leaderboard(players);
         send_round_summary(players);
@@ -191,7 +199,7 @@ fn finish_game(players: &mut Vec<Player>) {
     println!("{:?}", message_json);
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
     for player in players {
-        &player.socket.shutdown(Shutdown::Both);
+        let _ = &player.socket.shutdown(Shutdown::Both);
     }
 }
 
