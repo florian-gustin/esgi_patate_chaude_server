@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
-use crate::challenge_message::ReportedChallengeResult;
+use std::thread;
+use crate::challenge_message::Challenge::MD5HashCash;
+use crate::challenge_message::{MD5HashCashInput, ReportedChallengeResult};
 use crate::client_message::ClientMessage;
 use crate::player::Player;
 use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, Welcome};
@@ -168,8 +170,18 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
 
 fn start_challenge(players: &mut Vec<Player>, round: u32, time: u32) {
     for round_number in 0..round {
-        println!("Round {}", round_number);
+        let random_time = rand::random::<f32>() * time as f32;
+        // let mut round_ended = false;
+        println!("Round {} will last {}", round_number, random_time);
+        // let mut thread = thread::spawn(move || {
+        //     thread::sleep(time::Duration::from_secs(random_time as u64));
+        //     round_ended = true;
+        // });
+        // while !round_ended {
+        //
+        // }
         send_leaderboard(players);
+        send_challenge(players);
         send_round_summary(players);
     }
 }
@@ -179,6 +191,18 @@ fn send_leaderboard(players: &mut Vec<Player>) {
     let public_players: Vec<PublicPlayer> = get_ordered_public_player_vec(players);
     let message = PublicLeaderBoard(public_players);
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
+}
+
+fn send_challenge(players: &mut Vec<Player>) {
+    let random_player = rand::random::<usize>() % players.len();
+    let challenge = ServerMessage::Challenge(MD5HashCash(MD5HashCashInput {
+        complexity: 16,
+        message: "A boring bicycle respects our smart computer.".to_string()
+    }));
+    let challenge_string = serde_json::to_string(&challenge).unwrap();
+    send_message(&players[random_player].socket, &challenge_string);
+    let message = read_message(&players[random_player].socket);
+    println!("For challenge={}, player answered {}", &challenge_string, message);
 }
 
 fn send_round_summary(players: &mut Vec<Player>) {

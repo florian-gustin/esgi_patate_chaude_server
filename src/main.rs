@@ -5,6 +5,8 @@ mod server_message;
 mod client_message;
 mod connection_manager;
 mod player;
+mod challenge;
+mod md5cash_challenge;
 
 fn main() {
     let args = App::new("patate_chaude_client")
