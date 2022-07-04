@@ -1,9 +1,10 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use crate::challenge_message::ReportedChallengeResult;
 use crate::client_message::ClientMessage;
 use crate::player::Player;
-use crate::server_message::{EndOfGame, PublicPlayer, ServerMessage, SubscribeError, SubscribeResult, Welcome};
-use crate::server_message::ServerMessage::PublicLeaderBoard;
+use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, SubscribeError, SubscribeResult, Welcome};
+use crate::server_message::ServerMessage::{PublicLeaderBoard};
 
 pub(crate) fn start_listening<'stream>() {
     let players = &mut Vec::<Player>::new();
@@ -83,7 +84,7 @@ fn send_message(mut stream: &TcpStream, message: &str) {
 
 fn send_message_to_players(players: &mut Vec<Player>, message: &str) {
     for player in players {
-        let mut stream = player.stream.lock().unwrap();
+        let mut stream = &player.socket;
         send_message(&mut stream, message);
     }
 }
@@ -173,7 +174,11 @@ fn send_leaderboard(players: &mut Vec<Player>) {
 }
 
 fn send_round_summary(players: &mut Vec<Player>) {
-
+    let message = ServerMessage::RoundSummary(RoundSummary{
+        challenge: "".parse().unwrap(),
+        chain: Vec::<ReportedChallengeResult>::new(),
+    });
+    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }
 
 fn finish_game(players: &mut Vec<Player>) {
