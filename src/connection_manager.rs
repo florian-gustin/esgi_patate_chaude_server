@@ -132,11 +132,11 @@ fn wait_for_game_to_start(listener: &TcpListener, password: String) {
 }
 
 fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_players: &mut bool, players: &mut Vec<Player>, password: String) {
-    println!("{:?}", message);
+    // println!("{:?}", message);
     let message_json = serde_json::from_str(&message).unwrap();
     match message_json {
         ClientMessage::Hello => {
-            println!("Hello");
+            // println!("Hello");
             register_new_player(stream, players);
         }
         ClientMessage::Subscribe(subscribe) => {

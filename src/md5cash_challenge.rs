@@ -24,6 +24,17 @@ impl Challenge for HashCash {
     }
 
     fn verify(&self, answer: Self::Output) -> bool {
-        true
+        let hexa = format!("{:016X}", answer.seed) + &self.input.message;
+        let hash = format!("{:016X}", md5::compute(hexa));
+
+        if hash != answer.hashcode {
+            return false;
+        }
+
+        let binary_seed = u128::from_str_radix(&hash.to_string(), 16).unwrap();
+        if binary_seed.leading_zeros() != self.input.complexity {
+            return false;
+        }
+        return true;
     }
 }
