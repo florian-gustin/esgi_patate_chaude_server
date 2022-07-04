@@ -3,7 +3,7 @@ use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::time::Instant;
 use crate::challenge::Challenge;
 use crate::challenge_message::Challenge::MD5HashCash;
-use crate::challenge_message::{ChallengeOutput, MD5HashCashInput, ReportedChallengeResult};
+use crate::challenge_message::{ChallengeOutput, ChallengeValue, MD5HashCashInput, ReportedChallengeResult};
 use crate::challenge_message::ChallengeMessage::ChallengeResult;
 use crate::client_message::ClientMessage;
 use crate::md5cash_challenge::HashCash;
@@ -176,8 +176,8 @@ fn start_game(players: &mut Vec<Player>, round: u32, time: u32) {
         let random_time = rand::random::<f32>() * time as f32;
         println!("Round {} will last {}", round_number, random_time);
         send_leaderboard(players);
-        process_round(players, random_time);
-        send_round_summary(players);
+        let chain = process_round(players, random_time);
+        send_round_summary(players, chain);
     }
 }
 
@@ -188,26 +188,32 @@ fn send_leaderboard(players: &mut Vec<Player>) {
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }
 
-fn process_round(players: &mut Vec<Player>, round_time: f32) {
+fn process_round(players: &mut Vec<Player>, round_time: f32) -> Vec<ReportedChallengeResult>{
     let mut round_ended = false;
     let mut elapsed_time = 0.0;
+    let mut chain = Vec::<ReportedChallengeResult>::new();
 
     let players_list_size = players.len();
     let mut target_player = &mut players[rand::random::<usize>() % players_list_size];
 
     while !round_ended {
+        let mut current_player = target_player.clone();
         let input = MD5HashCashInput {
             complexity: 16,
             message: "A boring bicycle respects our smart computer.".to_string()
         };
         let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
+
         let hashcash = HashCash::new(input.clone());
         let challenge_string = serde_json::to_string(&challenge).unwrap();
+
         let time_before_completion = Instant::now();
-        send_message(&target_player.socket, &challenge_string);
-        let message = read_message(&target_player.socket);
-        let time_after_completion = Instant::now();
+        send_message(&current_player.socket, &challenge_string);
+
+        let message = read_message(&current_player.socket);
+        let solving_time = Instant::now().duration_since(time_before_completion).as_secs_f64();
         let message_json = serde_json::from_str(&message).unwrap();
+
         let mut is_solved = false;
         match message_json {
             ChallengeResult(ref challenge_result) => {
@@ -220,26 +226,31 @@ fn process_round(players: &mut Vec<Player>, round_time: f32) {
                 }
             }
         }
-        elapsed_time += time_after_completion.duration_since(time_before_completion).as_secs_f64();
-        target_player.total_used_time += elapsed_time;
+
+        elapsed_time += solving_time;
+        current_player.total_used_time += solving_time;
         if elapsed_time > round_time as f64 {
             round_ended = true;
-            target_player.score -= 1;
+            current_player.score -= 1;
         } else if !is_solved {
             round_ended = true;
-            target_player.score -= 1;
+            current_player.score -= 1;
         } else {
-            target_player.steps += 1;
+            current_player.steps += 1;
         }
-        println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}",
-                 input.clone(),
-                 is_solved,
-                 round_time,
-                 elapsed_time,
-                 time_after_completion.duration_since(time_before_completion).as_secs_f64(),
-                 message_json);
+
+        chain.push(ReportedChallengeResult {
+            name: current_player.name.to_string(),
+            value: ChallengeValue::Ok(crate::challenge_message::ChallengeValueResult {
+                used_time: elapsed_time,
+                next_target: target_player.name.to_string()
+            }),
+        });
+
+        println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}", input.clone(), is_solved, round_time, elapsed_time, solving_time, message_json);
     }
     println!("End of round, player {} lost a point", target_player.name);
+    return chain;
 }
 
 fn find_player_by_username(players: &mut Vec<Player>, username: String) -> Option<&mut Player> {
@@ -251,10 +262,10 @@ fn find_player_by_username(players: &mut Vec<Player>, username: String) -> Optio
     None
 }
 
-fn send_round_summary(players: &mut Vec<Player>) {
+fn send_round_summary(players: &mut Vec<Player>, chain: Vec<ReportedChallengeResult>) {
     let message = ServerMessage::RoundSummary(RoundSummary{
         challenge: "".parse().unwrap(),
-        chain: Vec::<ReportedChallengeResult>::new(),
+        chain,
     });
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }

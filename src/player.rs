@@ -22,3 +22,16 @@ impl Player {
         }
     }
 }
+
+impl Clone for Player {
+    fn clone(&self) -> Player {
+        Player {
+            name: self.name.clone(),
+            socket: self.socket.try_clone().unwrap(),
+            score: self.score,
+            steps: self.steps,
+            is_active: self.is_active,
+            total_used_time: self.total_used_time,
+        }
+    }
+}

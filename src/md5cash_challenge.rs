@@ -24,8 +24,8 @@ impl Challenge for HashCash {
     }
 
     fn verify(&self, answer: Self::Output) -> bool {
-        let hexa = format!("{:016X}", answer.seed) + &self.input.message;
-        let hash = format!("{:016X}", md5::compute(hexa));
+        let hex = format!("{:016X}", answer.seed) + &self.input.message;
+        let hash = format!("{:016X}", md5::compute(hex));
 
         if hash != answer.hashcode {
             return false;
