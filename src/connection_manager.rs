@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::time::Instant;
 use crate::challenge::Challenge;
+use crate::challenge_generator::generate_sentence_from_words_list;
 use crate::challenge_message::Challenge::MD5HashCash;
 use crate::challenge_message::{ChallengeOutput, ChallengeValue, MD5HashCashInput, ReportedChallengeResult};
 use crate::challenge_message::ChallengeMessage::ChallengeResult;
@@ -10,8 +11,9 @@ use crate::md5cash_challenge::HashCash;
 use crate::player::Player;
 use crate::server_message::{EndOfGame, PublicPlayer, RoundSummary, ServerMessage, Welcome};
 use crate::server_message::ServerMessage::{PublicLeaderBoard};
+use crate::WordsList;
 
-pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32) {
+pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32, words_list: WordsList) {
     let players = &mut Vec::<Player>::new();
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(address);
@@ -24,7 +26,7 @@ pub(crate) fn start_listening(password: String, port: u16, round: u32, time: u32
     accept_clients_connection(&listener, players, password.clone());
     wait_for_game_to_start(&listener, password.clone());
 
-    start_game(players, round, time);
+    start_game(players, round, time, &words_list);
 
     finish_game(players);
 }
@@ -171,12 +173,12 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
     }
 }
 
-fn start_game(players: &mut Vec<Player>, round: u32, time: u32) {
+fn start_game(players: &mut Vec<Player>, round: u32, time: u32, words_list: &WordsList) {
     for round_number in 0..round {
         let random_time = rand::random::<f32>() * time as f32;
         println!("Round {} will last {}", round_number, random_time);
         send_leaderboard(players);
-        let chain = process_round(players, random_time);
+        let chain = process_round(players, random_time, &words_list);
         send_round_summary(players, chain);
     }
 }
@@ -188,7 +190,7 @@ fn send_leaderboard(players: &mut Vec<Player>) {
     send_message_to_players(players, &serde_json::to_string(&message).unwrap());
 }
 
-fn process_round(players: &mut Vec<Player>, round_time: f32) -> Vec<ReportedChallengeResult>{
+fn process_round(players: &mut Vec<Player>, round_time: f32, words_list: &WordsList) -> Vec<ReportedChallengeResult>{
     let mut round_ended = false;
     let mut elapsed_time = 0.0;
     let mut chain = Vec::<ReportedChallengeResult>::new();
@@ -200,7 +202,7 @@ fn process_round(players: &mut Vec<Player>, round_time: f32) -> Vec<ReportedChal
         let mut current_player = target_player.clone();
         let input = MD5HashCashInput {
             complexity: 16,
-            message: "A boring bicycle respects our smart computer.".to_string()
+            message: generate_sentence_from_words_list(&words_list)
         };
         let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
 
