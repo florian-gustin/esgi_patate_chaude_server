@@ -197,9 +197,9 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
 
     let players_list_size = players.len();
     let mut target_player = &mut players[rand::random::<usize>() % players_list_size];
+    let mut next_target = &String::new();
 
     while !round_ended {
-        let mut current_player = target_player.clone();
         let input = MD5HashCashInput {
             complexity,
             message: generate_sentence_from_words_list(&words_list)
@@ -210,16 +210,16 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
         let challenge_string = serde_json::to_string(&challenge).unwrap();
 
         let time_before_completion = Instant::now();
-        send_message(&current_player.socket, &challenge_string);
+        send_message(&target_player.socket, &challenge_string);
 
-        let message = read_message(&current_player.socket);
+        let message = read_message(&target_player.socket);
         let solving_time = Instant::now().duration_since(time_before_completion).as_secs_f64();
         let message_json = serde_json::from_str(&message).unwrap();
 
         let mut is_solved = false;
         match message_json {
             ChallengeResult(ref challenge_result) => {
-                target_player = find_player_by_username(players, challenge_result.next_target.clone()).unwrap();
+                next_target = &challenge_result.next_target;
                 match &challenge_result.answer {
                     ChallengeOutput::MD5HashCash(md5hashcash) => {
                         is_solved = hashcash.verify(md5hashcash.clone());
@@ -230,26 +230,26 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
         }
 
         elapsed_time += solving_time;
-        current_player.total_used_time += solving_time;
+        target_player.total_used_time += solving_time;
         if elapsed_time > round_time as f64 {
             round_ended = true;
-            current_player.score -= 1;
+            target_player.score -= 1;
         } else if !is_solved {
             round_ended = true;
-            current_player.score -= 1;
+            target_player.score -= 1;
         } else {
-            current_player.steps += 1;
+            target_player.steps += 1;
         }
 
         chain.push(ReportedChallengeResult {
-            name: current_player.name.to_string(),
+            name: target_player.name.to_string(),
             value: ChallengeValue::Ok(crate::challenge_message::ChallengeValueResult {
                 used_time: elapsed_time,
-                next_target: target_player.name.to_string()
+                next_target: next_target.to_string(),
             }),
         });
-
         println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}", input.clone(), is_solved, round_time, elapsed_time, solving_time, message_json);
+        target_player = find_player_by_username(players, next_target.to_string()).unwrap();
     }
     println!("End of round, player {} lost a point", target_player.name);
     return chain;
