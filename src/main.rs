@@ -13,6 +13,10 @@ mod challenge_generator;
 fn main() {
     let args = App::new("patate_chaude_client")
         .version("1.0")
+        .arg(Arg::with_name("complexity")
+            .short("c".parse().unwrap())
+            .help("Sets the complexity, default is 16")
+            .takes_value(true))
         .arg(Arg::with_name("password")
             .short("s".parse().unwrap())
             .help("Sets the secret password, default is 1234")
@@ -33,7 +37,15 @@ fn main() {
     let mut words_list = WordsList::new();
     words_list = challenge_generator::init_word_list(words_list);
     println!("Hello, world!");
-    connection_manager::start_listening(get_password(&args), get_port(&args), get_round(&args), get_round_time(&args), words_list);
+    connection_manager::start_listening(get_complexity(&args), get_password(&args), get_port(&args), get_round(&args), get_round_time(&args), words_list);
+}
+
+fn get_complexity(args: &ArgMatches) -> u32 {
+    if args.is_present("complexity") {
+        args.value_of("complexity").unwrap().parse::<u32>().unwrap()
+    } else {
+        16
+    }
 }
 
 fn get_password(args: &ArgMatches) -> String {
