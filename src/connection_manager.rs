@@ -363,3 +363,16 @@ fn get_ordered_public_player_vec(players: &mut Vec<Player>) -> Vec<PublicPlayer>
     }).collect();
     return public_players;
 }
+
+#[test]
+fn test_transform_u32_to_array_of_u8() {
+    let array: [u8; 4] = [0, 0, 0, 8];
+    transform_u32_to_array_of_u8(8);
+    assert_eq!(array, [0, 0, 0, 8]);
+}
+
+#[test]
+fn test_transform_array_of_u8_to_u32() {
+    let array: [u8; 4] = [0, 0, 0, 8];
+    assert_eq!(transform_array_of_u8_to_u32(array), 8);
+}

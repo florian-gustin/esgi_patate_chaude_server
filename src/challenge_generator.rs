@@ -85,3 +85,38 @@ pub(crate) fn generate_sentence_from_words_list(words_list: &WordsList) -> Strin
     sentence.push_str(&words_list.adjs[rand::random::<usize>() % words_list.adjs.len()]);
     return sentence;
 }
+
+#[test]
+fn test_init_word_list() {
+    let mut words_list = WordsList::new();
+    words_list = init_word_list(words_list);
+    assert_eq!(words_list.adjs.len(), 170);
+    assert_eq!(words_list.advs.len(), 92);
+    assert_eq!(words_list.dets.len(), 21);
+    assert_eq!(words_list.preps.len(), 35);
+    assert_eq!(words_list.prons.len(), 42);
+    assert_eq!(words_list.substs.len(), 596);
+    assert_eq!(words_list.verbes.len(), 411);
+}
+
+#[test]
+fn test_extract_word_from_line() {
+    let line = "triompher verbe. 1811";
+    let word = extract_word_from_line(line);
+    assert_eq!(word, "triompher");
+}
+
+//A function that test generate_sentence_from_words_list method by passing a WordsList object as a parameter.
+#[test]
+fn test_generate_sentence_from_words_list() {
+    let mut words_list = WordsList::new();
+    words_list.adjs.push("dangereux".to_string());
+    words_list.advs.push("environ".to_string());
+    words_list.dets.push("plusieurs".to_string());
+    words_list.preps.push("depuis".to_string());
+    words_list.prons.push("chacun".to_string());
+    words_list.substs.push("bureau".to_string());
+    words_list.verbes.push("manger".to_string());
+    let sentence = generate_sentence_from_words_list(&words_list);
+    assert_eq!(sentence, "chacun manger depuis environ plusieurs bureau dangereux");
+}
