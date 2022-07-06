@@ -20,7 +20,7 @@ pub(crate) fn start_listening(complexity: u32, password: String, port: u16, roun
 
     let listener = match listener {
         Ok(l) => l,
-        Err(err) => panic!("Cannot listen on port : {err:?}")
+        Err(err) => panic!("Cannot listen on port : {}", err)
     };
 
     accept_clients_connection(&listener, players, password.clone());
@@ -101,8 +101,19 @@ fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>, 
     while *should_accept_players {
         println!("Players: {:?}", players);
         let mut incoming = listener.incoming();
-        let stream = incoming.next().unwrap();
-        let stream = stream.unwrap();
+        let stream = match incoming.next() {
+            Some(stream) => match stream {
+                Ok(stream) => stream,
+                Err(_) => {
+                    println!("Failed to connect client");
+                    break;
+                }
+            },
+            None => {
+                println!("Failed to connect client");
+                break;
+            }
+        };
         let message = read_message(&stream);
         analyse_client_message(&message, &stream, should_accept_players, players, password.clone());
     }
@@ -113,10 +124,24 @@ fn wait_for_game_to_start(listener: &TcpListener, password: String) {
     let wait_start_order = &mut true;
     while *wait_start_order {
         let mut incoming = listener.incoming();
-        let stream = incoming.next().unwrap();
-        let stream = stream.unwrap();
+        let stream = match incoming.next() {
+            Some(stream) => match stream {
+                Ok(stream) => stream,
+                Err(_) => {
+                    println!("Client failed to answer");
+                    break;
+                }
+            },
+            None => {
+                println!("Client failed to answer");
+                break;
+            }
+        };
         let message = read_message(&stream);
-        let message_json = serde_json::from_str(&message).unwrap();
+        let message_json = match serde_json::from_str(&message) {
+            Ok(message_json) => message_json,
+            Err(_) => continue
+        };
         match message_json {
             ClientMessage::StartGame(start_game) => {
                 println!("StartGame {:?}", start_game);
@@ -135,7 +160,10 @@ fn wait_for_game_to_start(listener: &TcpListener, password: String) {
 
 fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_players: &mut bool, players: &mut Vec<Player>, password: String) {
     // println!("{:?}", message);
-    let message_json = serde_json::from_str(&message).unwrap();
+    let message_json = match serde_json::from_str(&message) {
+        Ok(message_json) => message_json,
+        Err(_) => return
+    };
     match message_json {
         ClientMessage::Hello => {
             // println!("Hello");
@@ -158,9 +186,16 @@ fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_playe
 
 fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
     let response = ServerMessage::Welcome(Welcome { version: 1 });
-    send_message(&stream, &serde_json::to_string(&response).unwrap());
+    let server_message = match serde_json::to_string(&response) {
+        Ok(server_message) => server_message,
+        Err(_) => return
+    };
+    send_message(&stream, &server_message);
     let message = read_message(&stream);
-    let message_json = serde_json::from_str(&message).unwrap();
+    let message_json = match serde_json::from_str(&message) {
+        Ok(message_json) => message_json,
+        Err(_) => return
+    };
     match message_json {
         ClientMessage::Subscribe(subscribe) => {
             println!("Subscribe {:?}", subscribe);
@@ -186,8 +221,11 @@ fn start_game(complexity: u32, players: &mut Vec<Player>, round: u32, time: u32,
 fn send_leaderboard(players: &mut Vec<Player>) {
     players.sort_by(|a, b| b.score.cmp(&a.score));
     let public_players: Vec<PublicPlayer> = get_ordered_public_player_vec(players);
-    let message = PublicLeaderBoard(public_players);
-    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
+    let message = match serde_json::to_string(&PublicLeaderBoard(public_players)) {
+        Ok(message) => message,
+        Err(_) => return
+    };
+    send_message_to_players(players, &message);
 }
 
 fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, words_list: &WordsList) -> Vec<ReportedChallengeResult>{
@@ -207,14 +245,20 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
         let challenge = ServerMessage::Challenge(MD5HashCash(input.clone()));
 
         let hashcash = HashCash::new(input.clone());
-        let challenge_string = serde_json::to_string(&challenge).unwrap();
+        let challenge_string = match serde_json::to_string(&challenge) {
+            Ok(challenge_string) => challenge_string,
+            Err(_) => continue
+        };
 
         let time_before_completion = Instant::now();
         send_message(&target_player.socket, &challenge_string);
 
         let message = read_message(&target_player.socket);
         let solving_time = Instant::now().duration_since(time_before_completion).as_secs_f64();
-        let message_json = serde_json::from_str(&message).unwrap();
+        let message_json = match serde_json::from_str(&message) {
+            Ok(message_json) => message_json,
+            Err(_) => continue
+        };
 
         let mut is_solved = false;
         match message_json {
@@ -249,27 +293,45 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
             }),
         });
         println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}", input.clone(), is_solved, round_time, elapsed_time, solving_time, message_json);
-        target_player = find_player_by_username(players, next_target.to_string()).unwrap();
+        target_player = match find_player_by_username(players, next_target.to_string()) {
+            Some(player) => player,
+            None => {
+                println!("No active player found");
+                return chain;
+            }
+        };
     }
     println!("End of round, player {} lost a point", target_player.name);
     return chain;
 }
 
 fn find_player_by_username(players: &mut Vec<Player>, username: String) -> Option<&mut Player> {
+    let mut found_player = None;
     for player in players {
-        if player.name == username {
+        if player.clone().name == username && player.clone().is_active {
             return Some(player);
         }
+        if player.clone().is_active {
+            found_player = Some(player);
+        }
     }
-    None
+    return found_player;
 }
 
 fn send_round_summary(players: &mut Vec<Player>, chain: Vec<ReportedChallengeResult>) {
+    let challenge_name = match chain.first() {
+        Some(challenge) => challenge.name.clone(),
+        None => "".to_string()
+    };
     let message = ServerMessage::RoundSummary(RoundSummary{
-        challenge: "".parse().unwrap(),
+        challenge: challenge_name,
         chain,
     });
-    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
+    let message_json = match serde_json::to_string(&message) {
+        Ok(message) => message,
+        Err(_) => return
+    };
+    send_message_to_players(players, &message_json);
 }
 
 fn finish_game(players: &mut Vec<Player>) {
@@ -278,9 +340,12 @@ fn finish_game(players: &mut Vec<Player>) {
     let message = ServerMessage::EndOfGame(EndOfGame {
         leader_board: public_players,
     });
-    let message_json = serde_json::to_string(&message).unwrap();
+    let message_json = match serde_json::to_string(&message) {
+        Ok(message) => message,
+        Err(_) => "".to_string()
+    };
     println!("{:?}", message_json);
-    send_message_to_players(players, &serde_json::to_string(&message).unwrap());
+    send_message_to_players(players, &message_json);
     for player in players {
         let _ = &player.socket.shutdown(Shutdown::Both);
     }

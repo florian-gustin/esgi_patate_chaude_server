@@ -42,7 +42,14 @@ fn main() {
 
 fn get_complexity(args: &ArgMatches) -> u32 {
     if args.is_present("complexity") {
-        args.value_of("complexity").unwrap().parse::<u32>().unwrap()
+        match args.value_of("complexity") {
+            Some(value) =>
+                match value.parse::<u32>() {
+                    Ok(n) => n,
+                    Err(_) => 16,
+                },
+            None => 16,
+        }
     } else {
         16
     }
@@ -50,7 +57,10 @@ fn get_complexity(args: &ArgMatches) -> u32 {
 
 fn get_password(args: &ArgMatches) -> String {
     if args.is_present("password") {
-        args.value_of("password").unwrap().to_string()
+        match args.value_of("password") {
+            Some(password) => password.to_string(),
+            None => "1234".to_string(),
+        }
     } else {
         "1234".to_string()
     }
@@ -58,7 +68,14 @@ fn get_password(args: &ArgMatches) -> String {
 
 fn get_port(args: &ArgMatches) -> u16 {
     if args.is_present("port") {
-        args.value_of("port").unwrap().parse().unwrap()
+        match args.value_of("port") {
+            Some(port) =>
+                match port.parse::<u16>() {
+                    Ok(port) => port,
+                    Err(err) => panic!("{:?}", err),
+                },
+            None => 7878,
+        }
     } else {
         7878
     }
@@ -66,7 +83,14 @@ fn get_port(args: &ArgMatches) -> u16 {
 
 fn get_round(args: &ArgMatches) -> u32 {
     if args.is_present("round") {
-        args.value_of("round").unwrap().parse().unwrap()
+        match args.value_of("round") {
+            Some(round) =>
+                match round.parse::<u32>() {
+                    Ok(round) => round,
+                    Err(err) => panic!("{:?}", err),
+                },
+            None => 100,
+        }
     } else {
         100
     }
@@ -74,7 +98,14 @@ fn get_round(args: &ArgMatches) -> u32 {
 
 fn get_round_time(args: &ArgMatches) -> u32 {
     if args.is_present("round-time") {
-        args.value_of("round-time").unwrap().parse().unwrap()
+        match args.value_of("round-time") {
+            Some(round_time) =>
+                match round_time.parse(){
+                    Ok(round_time) => round_time,
+                    Err(err) => panic!("{:?}", err),
+                },
+            None => 2,
+        }
     } else {
         2
     }

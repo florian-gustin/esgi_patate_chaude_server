@@ -28,38 +28,44 @@ impl WordsList {
 
 pub(crate) fn init_word_list(mut words_list: WordsList) -> WordsList {
     let dictionary = "res/dictionary.txt";
-    let file = File::open(dictionary).unwrap();
+    let file = match File::open(dictionary) {
+        Ok(file) => file,
+        Err(e) => panic!("Couldn't open file: {}", e),
+    };
     let reader = BufReader::new(file);
 
     for (_, line) in reader.lines().enumerate() {
-        // println!("Line: {:?}", line.as_ref());
-        match line.as_ref() {
-            Err(err) => {
-                // println!("Error: {:?} reading line {:?}", err, line.as_ref());
-                continue;
-            },
-            _ => {}
-        }
-        if line.as_ref().unwrap().contains("adj.") {
-            words_list.adjs.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("adv.") {
-            words_list.advs.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("det.") {
-            words_list.dets.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("prep.") {
-            words_list.preps.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("pron.") {
-            words_list.prons.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("subst.") {
-            words_list.substs.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
-        } else if line.as_ref().unwrap().contains("verbe.") {
-            words_list.verbes.push(line.unwrap().split(" ").collect::<Vec<&str>>()[0].to_string());
+        // println!("Line: {:?}", line_ref);
+        let line_ref = match line.as_ref() {
+            Ok(line_ref) => line_ref,
+            Err(_) => continue,
+        };
+
+        if line_ref.contains("adj.") {
+            words_list.adjs.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("adv.") {
+            words_list.advs.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("det.") {
+            words_list.dets.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("prep.") {
+            words_list.preps.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("pron.") {
+            words_list.prons.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("subst.") {
+            words_list.substs.push(extract_word_from_line(line_ref));
+        } else if line_ref.contains("verbe.") {
+            words_list.verbes.push(extract_word_from_line(line_ref));
         } else {
-            // println!("Unknown line: {:?}", line.as_ref());
+            // println!("Unknown line: {:?}", line_ref);
             continue;
         }
     }
     return words_list;
+}
+
+fn extract_word_from_line(line: &str) -> String {
+    let line_string = line.split(" ").collect::<Vec<&str>>()[0].to_string();
+    return line_string;
 }
 
 pub(crate) fn generate_sentence_from_words_list(words_list: &WordsList) -> String {

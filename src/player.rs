@@ -12,26 +12,34 @@ pub(crate) struct Player {
 
 impl Player {
     pub(crate) fn new(name: String, socket: &TcpStream) -> Player {
-        Player {
-            name,
-            socket: socket.try_clone().unwrap(),
-            score: 0,
-            steps: 0,
-            is_active: true,
-            total_used_time: 0.0,
+        let socket_clone = socket.try_clone();
+        match socket_clone {
+            Ok(stream) => Player {
+                name,
+                socket: stream,
+                score: 0,
+                steps: 0,
+                is_active: false,
+                total_used_time: 0.0,
+            },
+            Err(_) => panic!("Error cloning socket"),
         }
     }
 }
 
 impl Clone for Player {
     fn clone(&self) -> Player {
-        Player {
-            name: self.name.clone(),
-            socket: self.socket.try_clone().unwrap(),
-            score: self.score,
-            steps: self.steps,
-            is_active: self.is_active,
-            total_used_time: self.total_used_time,
+        let socket_clone = self.socket.try_clone();
+        match socket_clone {
+            Ok(socket) => Player {
+                name: self.name.clone(),
+                socket,
+                score: self.score,
+                steps: self.steps,
+                is_active: self.is_active,
+                total_used_time: self.total_used_time,
+            },
+            Err(_) => panic!("Error cloning socket"),
         }
     }
 }
