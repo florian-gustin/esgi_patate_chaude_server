@@ -34,7 +34,7 @@ impl Challenge for HashCash {
         let binary_seed_result = u128::from_str_radix(&hash.to_string(), 16);
         match binary_seed_result {
             Ok(binary_seed) => {
-                if binary_seed.leading_zeros() != self.input.complexity {
+                if binary_seed.leading_zeros() == self.input.complexity {
                     return true;
                 }
             }

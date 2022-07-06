@@ -36,7 +36,6 @@ fn main() {
         .get_matches();
     let mut words_list = WordsList::new();
     words_list = challenge_generator::init_word_list(words_list);
-    println!("Hello, world!");
     connection_manager::start_listening(get_complexity(&args), get_password(&args), get_port(&args), get_round(&args), get_round_time(&args), words_list);
 }
 

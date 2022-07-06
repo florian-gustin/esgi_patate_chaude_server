@@ -98,8 +98,9 @@ fn send_message_to_players(players: &mut Vec<Player>, message: &str) {
 
 fn accept_clients_connection(listener: &TcpListener, players: &mut Vec<Player>, password: String) {
     let should_accept_players = &mut true;
+    println!("Server started, waiting for players to connect...");
     while *should_accept_players {
-        println!("Players: {:?}", players);
+        // println!("Players: {:?}", players);
         let mut incoming = listener.incoming();
         let stream = match incoming.next() {
             Some(stream) => match stream {
@@ -144,7 +145,7 @@ fn wait_for_game_to_start(listener: &TcpListener, password: String) {
         };
         match message_json {
             ClientMessage::StartGame(start_game) => {
-                println!("StartGame {:?}", start_game);
+                println!("Starting game!");
                 if start_game.key == password {
                     *wait_start_order = false;
                 } else {
@@ -169,12 +170,12 @@ fn analyse_client_message(message: &str, stream: &TcpStream, should_accept_playe
             // println!("Hello");
             register_new_player(stream, players);
         }
-        ClientMessage::Subscribe(subscribe) => {
-            println!("Subscribe {:?}", subscribe);
+        ClientMessage::Subscribe(_) => {
+            // println!("Subscribe {:?}", subscribe);
             send_message(stream, "Unexpected message here");
         }
         ClientMessage::StartGame(start_game) => {
-            println!("StartGame {:?}", start_game);
+            // println!("StartGame {:?}", start_game);
             if start_game.key == password {
                 *should_accept_players = false;
             } else {
@@ -198,7 +199,7 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
     };
     match message_json {
         ClientMessage::Subscribe(subscribe) => {
-            println!("Subscribe {:?}", subscribe);
+            println!("Player {} subscribed to the server", subscribe.name);
             let player = Player::new(subscribe.name, &stream);
             players.push(player);
         }
@@ -211,7 +212,7 @@ fn register_new_player(stream: &TcpStream, players: &mut Vec<Player>) {
 fn start_game(complexity: u32, players: &mut Vec<Player>, round: u32, time: u32, words_list: &WordsList) {
     for round_number in 0..round {
         let random_time = rand::random::<f32>() * time as f32;
-        println!("Round {} will last {}", round_number, random_time);
+        println!("Round {} is starting and will last {}", round_number, random_time);
         send_leaderboard(players);
         let chain = process_round(complexity, players, random_time, &words_list);
         send_round_summary(players, chain);
@@ -235,7 +236,7 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
 
     let players_list_size = players.len();
     let mut target_player = &mut players[rand::random::<usize>() % players_list_size];
-    let mut next_target = &String::new();
+    let mut next_target: &String;
 
     while !round_ended {
         let input = MD5HashCashInput {
@@ -273,16 +274,17 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
             }
         }
 
+        // println!("Player {} solved answered {} for the challenge in {} ms", target_player.name, is_solved, solving_time);
+
         elapsed_time += solving_time;
         target_player.total_used_time += solving_time;
+        target_player.steps += 1;
         if elapsed_time > round_time as f64 {
             round_ended = true;
             target_player.score -= 1;
         } else if !is_solved {
             round_ended = true;
             target_player.score -= 1;
-        } else {
-            target_player.steps += 1;
         }
 
         chain.push(ReportedChallengeResult {
@@ -292,7 +294,7 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
                 next_target: next_target.to_string(),
             }),
         });
-        println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}", input.clone(), is_solved, round_time, elapsed_time, solving_time, message_json);
+        // println!("For challenge={:?}, correct answer={}, round time={} elapsed time={} answer found in {}, player answered {:?}", input.clone(), is_solved, round_time, elapsed_time, solving_time, message_json);
         target_player = match find_player_by_username(players, next_target.to_string()) {
             Some(player) => player,
             None => {
@@ -300,8 +302,10 @@ fn process_round(complexity: u32, players: &mut Vec<Player>, round_time: f32, wo
                 return chain;
             }
         };
+        // println!("Continue round ? {}", round_ended);
     }
-    println!("End of round, player {} lost a point", target_player.name);
+
+    // println!("End of round, player {} lost a point", target_player.name);
     return chain;
 }
 
@@ -344,7 +348,7 @@ fn finish_game(players: &mut Vec<Player>) {
         Ok(message) => message,
         Err(_) => "".to_string()
     };
-    println!("{:?}", message_json);
+    println!("Game finished, closing clients connections!");
     send_message_to_players(players, &message_json);
     for player in players {
         let _ = &player.socket.shutdown(Shutdown::Both);

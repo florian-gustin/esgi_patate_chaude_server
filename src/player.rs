@@ -19,7 +19,7 @@ impl Player {
                 socket: stream,
                 score: 0,
                 steps: 0,
-                is_active: false,
+                is_active: true,
                 total_used_time: 0.0,
             },
             Err(_) => panic!("Error cloning socket"),
