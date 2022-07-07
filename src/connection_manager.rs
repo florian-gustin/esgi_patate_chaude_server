@@ -348,11 +348,12 @@ fn finish_game(players: &mut Vec<Player>) {
         Ok(message) => message,
         Err(_) => "".to_string()
     };
-    println!("Game finished, closing clients connections!");
     send_message_to_players(players, &message_json);
     for player in players {
+        println!("Player {} has score {}", player.name, player.score);
         let _ = &player.socket.shutdown(Shutdown::Both);
     }
+    println!("Game finished, all clients connections are closed!");
 }
 
 fn get_ordered_public_player_vec(players: &mut Vec<Player>) -> Vec<PublicPlayer> {
